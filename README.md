@@ -9,10 +9,21 @@ Este repositório já vem com as duas funções que você pediu:
 1. **Interface para conectar em org Salesforce** (sandbox ou produção)
 2. **Interface para executar Apex Anonymous**
 
-As interfaces são expostas como tools do plugin:
+As interfaces são expostas de duas formas:
+
+- **Tools de servidor** (para uso por agentes/automação)
+- **Interface TUI interativa** (menu no Orca/OpenCode)
+
+Tools:
 
 - `salesforce_connect_org`
 - `salesforce_run_apex_anonymous`
+
+Comandos da interface TUI:
+
+- `/sf` (abre menu principal)
+- `/sf-connect` (fluxo de login)
+- `/sf-apex` (fluxo de execução Apex)
 
 ---
 
@@ -53,6 +64,18 @@ No seu `opencode.jsonc`, adicione o plugin:
 ---
 
 ## Uso das tools
+
+> Observação: no Code Mode, as tools aparecem como `tools.salesforce.connect_org` e `tools.salesforce.run_apex_anonymous`.
+
+## Uso da interface TUI (recomendado)
+
+1. Execute `/sf` para abrir o menu.
+2. Escolha **Conectar org** ou **Executar Apex Anonymous**.
+3. Siga os diálogos (ambiente, alias, org alvo, código/arquivo Apex).
+
+---
+
+## Uso das tools (modo avançado)
 
 ### 1) Conectar em sandbox
 

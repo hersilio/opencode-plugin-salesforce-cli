@@ -1,5 +1,5 @@
 import { Plugin } from "@opencode/plugin"
-import { prettyJson, runSfCli, sanitizeSecrets, shortText } from "./sf"
+import { prettyJson, runApexAnonymous, runSfCli, sanitizeSecrets, shortText } from "./sf"
 
 type ConnectOrgInput = {
   environment: "sandbox" | "production"
@@ -8,13 +8,6 @@ type ConnectOrgInput = {
   browser?: "chrome" | "edge" | "firefox"
   instanceUrl?: string
   clientId?: string
-}
-
-type RunApexAnonymousInput = {
-  targetOrg: string
-  apexCode?: string
-  apexFilePath?: string
-  apiVersion?: string
 }
 
 const SANDBOX_URL = "https://test.salesforce.com"
@@ -165,7 +158,12 @@ export default Plugin.define({
           additionalProperties: false,
         },
         execute: async (rawInput) => {
-          const input = rawInput as RunApexAnonymousInput
+          const input = rawInput as {
+            targetOrg: string
+            apexCode?: string
+            apexFilePath?: string
+            apiVersion?: string
+          }
           const targetOrg = normalizeString(input.targetOrg)
 
           if (!targetOrg) {
@@ -183,19 +181,16 @@ export default Plugin.define({
             throw new Error("Informe apenas um entre 'apexCode' e 'apexFilePath'.")
           }
 
-          const args = ["apex", "run", "--target-org", targetOrg, "--json"]
-
-          if (apexFilePath) {
-            args.push("--file", apexFilePath)
-          } else if (apexCode) {
-            // Avoid shell interpolation. Passes the code as a single argument.
-            args.push("--file", "-")
-          }
-
-          const apiVersion = normalizeString(input.apiVersion)
-          if (apiVersion) args.push("--api-version", apiVersion)
-
-          const result = await runSfCliWithInlineCode(sfBinary, args, apexCode, timeoutMs)
+          const result = await runApexAnonymous(
+            sfBinary,
+            {
+              targetOrg,
+              apexCode,
+              apexFilePath,
+              apiVersion: normalizeString(input.apiVersion),
+            },
+            { timeoutMs },
+          )
           const safeJson = sanitizeSecrets(result.json)
 
           if (result.timedOut) {
@@ -253,38 +248,4 @@ function readNumberOption(options: unknown, key: string): number | undefined {
   const value = (options as Record<string, unknown>)[key]
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return undefined
   return value
-}
-
-async function runSfCliWithInlineCode(
-  sfBinary: string,
-  args: string[],
-  apexCode: string | undefined,
-  timeoutMs: number,
-) {
-  // `sf apex run` doesn't support a dedicated inline flag; for inline execution
-  // we write a temporary file in-memory-compatible style through stdin redirection
-  // fallback by creating a temp file manually when code is provided.
-  if (!apexCode) {
-    return runSfCli(sfBinary, args, { timeoutMs })
-  }
-
-  const { mkdtemp, writeFile, rm } = await import("node:fs/promises")
-  const { join } = await import("node:path")
-  const { tmpdir } = await import("node:os")
-
-  const tempDir = await mkdtemp(join(tmpdir(), "opencode-sf-apex-"))
-  const tempFile = join(tempDir, "anonymous.apex")
-
-  try {
-    await writeFile(tempFile, apexCode, "utf8")
-    const fileArgs = args.map((arg, index) => {
-      if (arg === "-" && index > 0 && args[index - 1] === "--file") {
-        return tempFile
-      }
-      return arg
-    })
-    return await runSfCli(sfBinary, fileArgs, { timeoutMs })
-  } finally {
-    await rm(tempDir, { recursive: true, force: true })
-  }
 }

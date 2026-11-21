@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process"
+import { rm, mkdtemp, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 type JsonValue =
   | string
@@ -19,6 +22,13 @@ export type SfCliResult = {
 
 type SfCliRunOptions = {
   timeoutMs?: number
+}
+
+export type RunApexAnonymousInput = {
+  targetOrg: string
+  apexCode?: string
+  apexFilePath?: string
+  apiVersion?: string
 }
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
@@ -130,4 +140,35 @@ export function prettyJson(value: unknown): string {
 export function shortText(text: string, max = 5_000): string {
   if (text.length <= max) return text
   return `${text.slice(0, max)}\n... [truncado ${text.length - max} caracteres]`
+}
+
+export async function runApexAnonymous(
+  sfBinary: string,
+  input: RunApexAnonymousInput,
+  options: SfCliRunOptions = {},
+): Promise<SfCliResult> {
+  const args = ["apex", "run", "--target-org", input.targetOrg, "--json"]
+
+  if (input.apiVersion?.trim()) {
+    args.push("--api-version", input.apiVersion.trim())
+  }
+
+  if (input.apexFilePath?.trim()) {
+    args.push("--file", input.apexFilePath.trim())
+    return runSfCli(sfBinary, args, options)
+  }
+
+  if (input.apexCode?.trim()) {
+    const tempDir = await mkdtemp(join(tmpdir(), "opencode-sf-apex-"))
+    const tempFile = join(tempDir, "anonymous.apex")
+    try {
+      await writeFile(tempFile, input.apexCode, "utf8")
+      args.push("--file", tempFile)
+      return await runSfCli(sfBinary, args, options)
+    } finally {
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  }
+
+  throw new Error("Informe 'apexCode' ou 'apexFilePath'.")
 }
